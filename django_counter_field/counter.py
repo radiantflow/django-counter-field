@@ -42,21 +42,34 @@ class Counter(object):
             raise TypeError("%s should be a CounterField on %s, but is %s" % (
                 self.counter_name, self.parent_model, type(counter_field)))
 
+    def has_parent_changed(self, new, old):
+        return self.parent_id(old) != self.parent_id(new)
+
     def receive_change(self, instance, changes):
         """
         Called when child model instances are saved/destroyed.
         Increments/decrements the underlying counter based on whether
         the child was/is in the counter.
         """
+
+        old_instance = changes.old_instance()
+
+        changed = self.has_parent_changed(instance, old_instance)
+
         was_in_counter = changes.was_persisted() and \
-                         self.is_in_counter(changes.old_instance())
+                         self.is_in_counter(old_instance)
         is_in_counter = changes.is_persisted() and \
                         self.is_in_counter(instance)
 
-        if not was_in_counter and is_in_counter:
-            self.increment(instance, 1)
-        elif was_in_counter and not is_in_counter:
-            self.increment(instance, -1)
+        if is_in_counter:
+            if changed or not was_in_counter:
+                self.increment(instance, 1)
+
+        if was_in_counter:
+            if changed:
+                self.increment(old_instance, -1)
+            elif not is_in_counter:
+                self.increment(instance, -1)
 
     def connect(self):
         """
