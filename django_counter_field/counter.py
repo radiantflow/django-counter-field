@@ -1,4 +1,6 @@
-from django.db.models import F
+from django.db.models import F, ForeignKey
+from django.contrib.contenttypes.generic import GenericForeignKey
+from django.core.exceptions import ImproperlyConfigured
 
 from django_model_changes import post_change
 from django_model_changes.changes import registry
@@ -18,17 +20,31 @@ class Counter(object):
     control over exactly which child model instances are to be counted.
     By default, all non-deleted instances are counted.
     """
-    def __init__(self, counter_name, foreign_field, is_in_counter=None):
+    def __init__(self, counter_name, foreign_field, is_in_counter=None, parent_model=None):
         self.counter_name = counter_name
-        self.foreign_field = foreign_field.field
-        self.child_model = self.foreign_field.model
-        self.parent_model = self.foreign_field.rel.to
+
+        if isinstance(foreign_field, ForeignKey):
+            self.foreign_field = foreign_field.field
+            self.child_model = self.foreign_field.model
+            self.parent_model =self.foreign_field.rel.to
+
+        elif isinstance(foreign_field, GenericForeignKey):
+            if not parent_model:
+                raise ImproperlyConfigured('%s is a GenericForeignKey field so it needs a parent_model to be specified'
+                      % str(foreign_field))
+            self.child_model = foreign_field.model
+            self.foreign_field = self.child_model._meta.get_field_by_name(foreign_field.fk_field)[0]
+            self.parent_model = parent_model
+        else:
+            raise TypeError("%s should be a ForeignKey or GenericForeignKey based field but is %s" % (
+                str(foreign_field), type(foreign_field)))
 
         if not is_in_counter:
             is_in_counter = lambda instance: True
         self.is_in_counter = is_in_counter
 
         self.connect()
+
 
     def validate(self):
         """
@@ -114,7 +130,7 @@ class Counter(object):
         return self.set_counter_field(parent_id, F(self.counter_name)+amount)
 
 
-def connect_counter(counter_name, foreign_field, is_in_counter=None):
+def connect_counter(counter_name, foreign_field, is_in_counter=None, parent_model=None):
     """
     Register a counter between a child model and a parent. The parent
     must define a CounterField field called *counter_name* and the child
@@ -133,4 +149,4 @@ def connect_counter(counter_name, foreign_field, is_in_counter=None):
     qualifies to be counted, and False otherwise. The callback should
     not concern itself with checking if the instance is deleted or not.
     """
-    return Counter(counter_name, foreign_field, is_in_counter)
+    return Counter(counter_name, foreign_field, is_in_counter=is_in_counter, parent_model=parent_model)
