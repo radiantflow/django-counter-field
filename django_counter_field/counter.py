@@ -20,21 +20,20 @@ class Counter(object):
     control over exactly which child model instances are to be counted.
     By default, all non-deleted instances are counted.
     """
-    def __init__(self, counter_name, foreign_field, is_in_counter=None, parent_model=None):
+    def __init__(self, counter_name, foreign_field, is_in_counter=None, parent_model=None, child_model=None):
         self.counter_name = counter_name
 
-        if isinstance(foreign_field, ForeignKey):
-            self.foreign_field = foreign_field.field
-            self.child_model = self.foreign_field.model
-            self.parent_model =self.foreign_field.rel.to
-
-        elif isinstance(foreign_field, GenericForeignKey):
+        if isinstance(foreign_field, GenericForeignKey):
             if not parent_model:
                 raise ImproperlyConfigured('%s is a GenericForeignKey field so it needs a parent_model to be specified'
                       % str(foreign_field))
-            self.child_model = foreign_field.model
+            self.child_model = child_model if child_model else foreign_field.model
             self.foreign_field = self.child_model._meta.get_field_by_name(foreign_field.fk_field)[0]
             self.parent_model = parent_model
+        elif foreign_field.field and isinstance(foreign_field.field, ForeignKey):
+            self.foreign_field = foreign_field.field
+            self.child_model = child_model if child_model else self.foreign_field.model
+            self.parent_model = parent_model if parent_model else self.foreign_field.rel.to
         else:
             raise TypeError("%s should be a ForeignKey or GenericForeignKey based field but is %s" % (
                 str(foreign_field), type(foreign_field)))
@@ -130,7 +129,7 @@ class Counter(object):
         return self.set_counter_field(parent_id, F(self.counter_name)+amount)
 
 
-def connect_counter(counter_name, foreign_field, is_in_counter=None, parent_model=None):
+def connect_counter(counter_name, foreign_field, is_in_counter=None, parent_model=None, child_model=None):
     """
     Register a counter between a child model and a parent. The parent
     must define a CounterField field called *counter_name* and the child
@@ -149,4 +148,4 @@ def connect_counter(counter_name, foreign_field, is_in_counter=None, parent_mode
     qualifies to be counted, and False otherwise. The callback should
     not concern itself with checking if the instance is deleted or not.
     """
-    return Counter(counter_name, foreign_field, is_in_counter=is_in_counter, parent_model=parent_model)
+    return Counter(counter_name, foreign_field, is_in_counter=is_in_counter, parent_model=parent_model, child_model=child_model)
