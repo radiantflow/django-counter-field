@@ -7,7 +7,8 @@ class CounterField(models.IntegerField):
     counter fields. The default value of a counter field is 0.
     """
     def __init__(self, *args, **kwargs):
-        kwargs['default'] = kwargs.get('default', 0)
+        kwargs.setdefault('default', 0)
+        kwargs.setdefault('editable', False)
         super(CounterField, self).__init__(*args, **kwargs)
 
 try:
