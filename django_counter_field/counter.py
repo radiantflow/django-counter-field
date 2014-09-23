@@ -1,6 +1,7 @@
 from django.db.models import F
 
 from django_model_changes import post_change
+from django_model_changes.changes import registry
 
 from .fields import CounterField
 
@@ -41,15 +42,15 @@ class Counter(object):
             raise TypeError("%s should be a CounterField on %s, but is %s" % (
                 self.counter_name, self.parent_model, type(counter_field)))
 
-    def receive_change(self, instance):
+    def receive_change(self, instance, changes):
         """
         Called when child model instances are saved/destroyed.
         Increments/decrements the underlying counter based on whether
         the child was/is in the counter.
         """
-        was_in_counter = instance.was_persisted() and \
-                         self.is_in_counter(instance.old_instance())
-        is_in_counter = instance.is_persisted() and \
+        was_in_counter = changes.was_persisted() and \
+                         self.is_in_counter(changes.old_instance())
+        is_in_counter = changes.is_persisted() and \
                         self.is_in_counter(instance)
 
         if not was_in_counter and is_in_counter:
@@ -62,9 +63,10 @@ class Counter(object):
         Register a counter between a child model and a parent.
         """
         self.validate()
+        registry.register(self.child_model)
 
-        def receiver(sender, instance, **kwargs):
-            self.receive_change(instance)
+        def receiver(sender, instance, changes, **kwargs):
+            self.receive_change(instance, changes)
         post_change.connect(receiver, sender=self.child_model, weak=False)
 
         name = "%s.%s.%s" % (
